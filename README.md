@@ -43,13 +43,16 @@ Then configure and test:
 ```
 
 That seeds `~/.telegram-notify/telegram.env`, walks you through pasting your bot token,
-helps you find your chat id, and sends a test message. You can re-run `/telegram-notify
-test`, `/telegram-notify discover`, or `/telegram-notify status` any time.
+helps you find your chat id, and sends a test message. To change settings later, run
+`/telegram-notify edit` to open that config file in your default editor. You can also
+re-run `/telegram-notify test`, `/telegram-notify discover`, or `/telegram-notify
+status` any time.
 
 ### Manual configuration (alternative to `/telegram-notify setup`)
 
 The first hook firing creates `~/.telegram-notify/telegram.env` with an empty token
-(so notifications stay silent until configured). Edit it and set at least:
+(so notifications stay silent until configured). Open it in your default editor with
+`/telegram-notify edit` (or `bash scripts/telegram-notify.sh --edit`) and set at least:
 
 ```
 TELEGRAM_BOT_TOKEN=123456789:AAE...      # from @BotFather

@@ -3,6 +3,7 @@
 #   Hook mode:  reads hook JSON on stdin, dispatches on hook_event_name
 #   --discover: lists chats/topics the bot can see, to find your IDs
 #   --test:     sends a test message to the configured destination
+#   --edit:     opens the config file in your default editor
 set -uo pipefail
 
 # Config and mutable state live in a stable per-user home, NOT beside the script:
@@ -556,8 +557,36 @@ main() {
   exit 0
 }
 
+# Open the config file in the user's editor. Honors $VISUAL/$EDITOR when set;
+# otherwise falls back to a per-platform GUI default launched non-blocking so it
+# never hangs a non-interactive caller (Notepad via `start`, macOS `open -t`,
+# Linux `xdg-open`, with a terminal editor as the last resort where no GUI is up).
+open_editor() {
+  local f="$1"
+  if [ -n "${VISUAL:-}" ]; then "$VISUAL" "$f"; return; fi
+  if [ -n "${EDITOR:-}" ]; then "$EDITOR" "$f"; return; fi
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      cmd //c start "" notepad "$(cygpath -w "$f" 2>/dev/null || printf '%s' "$f")" ;;
+    Darwin) open -t "$f" ;;
+    *)
+      if command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        xdg-open "$f"
+      elif command -v nano >/dev/null 2>&1; then nano "$f"
+      else vi "$f"; fi ;;
+  esac
+}
+
 case "${1:-}" in
   --discover) discover ;;
+  --edit|--config)
+    if [ ! -f "$CONFIG_FILE" ]; then
+      mkdir -p "$(dirname "$CONFIG_FILE")" 2>/dev/null || true
+      : > "$CONFIG_FILE" && chmod 600 "$CONFIG_FILE" 2>/dev/null || true
+    fi
+    echo "Opening $CONFIG_FILE in your editor…"
+    open_editor "$CONFIG_FILE"
+    ;;
   --test)
     [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ] \
       || die "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in $CONFIG_FILE first"
@@ -586,5 +615,5 @@ case "${1:-}" in
     fi
     ;;
   "") main ;;
-  *) die "unknown option: $1 (use --discover, --test, or pipe hook JSON on stdin)" ;;
+  *) die "unknown option: $1 (use --discover, --test, --edit, or pipe hook JSON on stdin)" ;;
 esac

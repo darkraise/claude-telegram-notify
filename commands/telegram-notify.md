@@ -1,6 +1,6 @@
 ---
 description: Set up, test, or inspect Telegram notifications for Claude Code
-argument-hint: "[setup|test|discover|status]"
+argument-hint: "[setup|edit|test|discover|status]"
 allowed-tools: Bash, Read, Edit
 ---
 
@@ -16,6 +16,9 @@ Interpret `$ARGUMENTS` as the subcommand (default to `status` if empty):
 3. Tell the user to paste their bot token from @BotFather. When they provide it, set it with an Edit to that file (never echo the token back). Prerequisites: `bash`, `curl`, and `jq` must be on PATH — on Windows these come from Git for Windows plus a `jq` install.
 4. If they don't know their chat id, run the `discover` flow below.
 5. Finish by running the `test` flow.
+
+## `edit` (also `config`)
+Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/telegram-notify.sh" --edit`. This opens `~/.telegram-notify/telegram.env` in the user's default editor (`$VISUAL`/`$EDITOR` if set, else Notepad on Windows, `open -t` on macOS, `xdg-open` on Linux), creating the file first if it doesn't exist yet. The editor launches non-blocking, so the command returns immediately. Tell the user which fields to fill in (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) and remind them the plugin re-reads the file on the next hook firing — no restart needed.
 
 ## `test`
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/telegram-notify.sh" --test` and report the result verbatim (it says whether the LLM summary gateway is disabled/reachable and whether the message sent).
