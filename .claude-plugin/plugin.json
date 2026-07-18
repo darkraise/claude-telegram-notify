@@ -1,0 +1,18 @@
+{
+  "name": "telegram-notify",
+  "description": "Push a Telegram message when a Claude Code session finishes a turn, ends on a question, or needs your attention. Cross-platform (Windows/Linux/macOS), multi-account aware, with optional LLM turn summaries.",
+  "version": "1.0.0",
+  "author": {
+    "name": "quang"
+  },
+  "homepage": "https://github.com/quang/claude-telegram-notify",
+  "repository": "https://github.com/quang/claude-telegram-notify",
+  "license": "MIT",
+  "keywords": [
+    "telegram",
+    "notifications",
+    "hooks",
+    "push",
+    "mobile"
+  ]
+}

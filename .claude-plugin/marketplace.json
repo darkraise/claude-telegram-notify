@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "telegram-notify",
+  "description": "Telegram push notifications for Claude Code sessions.",
+  "owner": {
+    "name": "quang"
+  },
+  "plugins": [
+    {
+      "name": "telegram-notify",
+      "source": "./",
+      "description": "Push a Telegram message when a Claude Code session finishes a turn, ends on a question, or needs your attention. Cross-platform, multi-account aware, optional LLM summaries.",
+      "category": "productivity"
+    }
+  ]
+}

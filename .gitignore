@@ -1,0 +1,5 @@
+# Nothing runtime lives in the repo — config/state go to ~/.telegram-notify/.
+# Guard against accidentally committing a real config or local cruft.
+telegram.env
+*.local
+.DS_Store

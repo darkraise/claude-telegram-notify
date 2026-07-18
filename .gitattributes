@@ -1,0 +1,2 @@
+# The hook script must stay LF on every OS (Git Bash chokes on CRLF).
+*.sh text eol=lf
