@@ -3,7 +3,7 @@
   "name": "telegram-notify",
   "description": "Telegram push notifications for Claude Code sessions.",
   "owner": {
-    "name": "quang"
+    "name": "Darkraise"
   },
   "plugins": [
     {

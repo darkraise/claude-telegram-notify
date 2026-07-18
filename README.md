@@ -32,7 +32,7 @@ on `PATH`:
 This repository is both a **marketplace** and the **plugin**. On any machine:
 
 ```
-/plugin marketplace add <this-repo-git-url-or-local-path>
+/plugin marketplace add https://github.com/darkraise/claude-telegram-notify
 /plugin install telegram-notify@telegram-notify
 ```
 
