@@ -572,9 +572,12 @@ main() {
 }
 
 # Open the config file in the user's editor. Honors $VISUAL/$EDITOR when set;
-# otherwise falls back to a per-platform GUI default launched non-blocking so it
-# never hangs a non-interactive caller (Notepad via `start`, macOS `open -t`,
-# Linux `xdg-open`, with a terminal editor as the last resort where no GUI is up).
+# otherwise a per-platform GUI default launched non-blocking (Notepad via `start`,
+# macOS `open -t`, Linux `xdg-open`). With no GUI, a terminal editor (nano/vi) is
+# used ONLY when attached to an interactive terminal — headless and without a TTY
+# (e.g. `--edit` run from the slash command) nano/vi would just hang, so instead
+# the config path is printed for the user to open directly. Returns non-zero in
+# that no-editor case so the caller can skip its "opening…" message.
 open_editor() {
   local f="$1"
   if [ -n "${VISUAL:-}" ]; then "$VISUAL" "$f"; return; fi
@@ -586,8 +589,14 @@ open_editor() {
     *)
       if command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
         xdg-open "$f"
-      elif command -v nano >/dev/null 2>&1; then nano "$f"
-      else vi "$f"; fi ;;
+      elif [ -t 0 ] && [ -t 1 ] && command -v nano >/dev/null 2>&1; then
+        nano "$f"
+      elif [ -t 0 ] && [ -t 1 ]; then
+        vi "$f"
+      else
+        printf 'No GUI editor and no interactive terminal — edit the config directly:\n  %s\nOr set $EDITOR / $VISUAL and re-run.\n' "$f"
+        return 1
+      fi ;;
   esac
 }
 
@@ -601,8 +610,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
         mkdir -p "$(dirname "$CONFIG_FILE")" 2>/dev/null || true
         : > "$CONFIG_FILE" && chmod 600 "$CONFIG_FILE" 2>/dev/null || true
       fi
-      echo "Opening $CONFIG_FILE in your editor…"
-      open_editor "$CONFIG_FILE"
+      open_editor "$CONFIG_FILE" && echo "Opening $CONFIG_FILE in your editor…"
       ;;
     --test)
       [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ] \

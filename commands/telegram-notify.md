@@ -18,7 +18,7 @@ Interpret `$ARGUMENTS` as the subcommand (default to `status` if empty):
 5. Finish by running the `test` flow.
 
 ## `edit` (also `config`)
-Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/telegram-notify.sh" --edit`. This opens `~/.telegram-notify/telegram.env` in the user's default editor (`$VISUAL`/`$EDITOR` if set, else Notepad on Windows, `open -t` on macOS, `xdg-open` on Linux), creating the file first if it doesn't exist yet. The editor launches non-blocking, so the command returns immediately. Tell the user which fields to fill in (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) and remind them the plugin re-reads the file on the next hook firing — no restart needed.
+Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/telegram-notify.sh" --edit`, creating the file first if needed. It opens `~/.telegram-notify/telegram.env` in `$VISUAL`/`$EDITOR` if set, else a GUI editor launched non-blocking (Notepad on Windows, `open -t` on macOS, `xdg-open` on Linux with a display), so the command returns immediately. On a **headless / non-interactive host** (no GUI and no TTY, e.g. this command running with no terminal) it does NOT launch a blocking terminal editor — it prints the config file path instead. In that case, relay the printed path so the user can open the file directly (or have them set `$EDITOR`/`$VISUAL`). Tell the user which fields to fill in (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) and remind them the plugin re-reads the file on the next hook firing — no restart needed.
 
 ## `test`
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/telegram-notify.sh" --test` and report the result verbatim (it says whether the LLM summary gateway is disabled/reachable and whether the message sent).

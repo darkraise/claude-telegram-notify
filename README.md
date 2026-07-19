@@ -146,5 +146,20 @@ message's own opening lines — nothing is lost, just less polished.
   emoji / `·`. If you hand-edit the send path, keep UTF-8 text off the curl argv.
 - **Per-project mode** needs the bot to be a group admin with Manage Topics; otherwise
   it falls back to the shared topic. Non-git folders always use the shared topic.
+- **Per-project topics are tracked by id, not name — so fresh installs can duplicate a
+  topic.** Telegram's Bot API cannot list a group's topics or look one up by name (there
+  is no `getForumTopics`; a topic's name only reaches a bot in the `forum_topic_created`
+  / `forum_topic_edited` update at creation/rename time). So the plugin can only remember
+  the id `createForumTopic` returned, in `topics.json` — keyed by the repo's git remote,
+  or its folder name when there's no remote. That map is **per-machine**: a fresh install
+  (or a second machine) with an empty map can't discover a topic you already have and
+  creates a new one with the **same name** (Telegram allows duplicate names). To reuse an
+  existing topic, pin its id — e.g. `{ "github.com/you/repo": 42 }` in
+  `~/.telegram-notify/topics.json`, getting the id from `--discover` — or share that file
+  (or point `TELEGRAM_TOPIC_MAP` at a synced path) across machines.
 - **Same bot on many machines is fine** — sending has no polling conflict. Only
   `--discover` (getUpdates) can conflict with another long-poller.
+- **`--edit` on a headless box.** With no GUI and no `$VISUAL`/`$EDITOR`, `--edit`
+  will not launch a blocking terminal editor (nano/vi) when there's no interactive
+  terminal — it prints the config path instead. Set `$EDITOR`/`$VISUAL`, or just edit
+  `~/.telegram-notify/telegram.env` directly.
