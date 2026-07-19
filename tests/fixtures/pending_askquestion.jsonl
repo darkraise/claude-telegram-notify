@@ -1,0 +1,4 @@
+{"type":"assistant","timestamp":"2026-07-19T05:57:14Z","isSidechain":false,"message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_bash1","name":"Bash","input":{"command":"cd /repo && git add plan.md && git commit -q -m msg"}}]}}
+{"type":"user","timestamp":"2026-07-19T05:57:21Z","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_bash1","content":"[master abc1234] msg"}]}}
+{"type":"assistant","timestamp":"2026-07-19T05:57:30Z","isSidechain":false,"message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Plan complete and committed."}]}}
+{"type":"assistant","timestamp":"2026-07-19T05:57:36Z","isSidechain":false,"message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_askq1","name":"AskUserQuestion","input":{"questions":[{"question":"Which execution approach do you want?","options":[{"label":"Subagent-driven"},{"label":"Inline execution"},{"label":"Just the plan for now"}]}]}}]}}

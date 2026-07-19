@@ -1,0 +1,1 @@
+{"type":"assistant","timestamp":"2026-07-19T06:00:00Z","isSidechain":false,"message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_bash9","name":"Bash","input":{"command":"rm -rf /tmp/scratch"}}]}}

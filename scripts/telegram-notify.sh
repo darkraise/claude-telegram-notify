@@ -346,25 +346,39 @@ llm_classify() {
                 then {kind, summary} else empty end' 2>/dev/null
 }
 
-# The pending tool_use in the last assistant message drives the permission
-# notification. Emits one line: "▸ Tool: target" plus " (+N more)" when the
-# assistant fired several tools at once. Per-tool target extraction lives in
-# The pending action behind a permission_prompt, as a compact JSON object:
-#   {sidechain, tool, n, target, question, options}
-# The Notification payload carries no tool detail, so this reads the transcript.
-# That write can lag the notification (same flush race as Stop), so we poll
-# briefly for a tool_use to appear. `sidechain` marks a subagent-issued call;
-# for AskUserQuestion, question/options are filled instead of a run target.
+# The pending action behind a permission/input Notification, as a compact JSON
+# object: {sidechain, tool, n, target, question, options}. The Notification
+# payload carries no tool detail, so this reads the transcript for the tool the
+# user is actually being asked about.
+#
+# "Pending" means UNRESOLVED: a tool_use with no matching tool_result yet — one
+# Claude is blocked on. This matters because the tool_use write can lag the
+# notification (the same flush race the Stop handler guards against): taking the
+# plain last tool_use would, in that window, report the previous already-run tool
+# instead (e.g. an old "git commit" Bash shown while the screen is really on an
+# AskUserQuestion). So we skip any tool_use that already has a result and poll
+# until the genuinely pending one appears. "▸ Tool: target" plus " (+N more)"
+# when several tools are pending at once; `sidechain` marks a subagent-issued
+# call; AskUserQuestion fills question/options instead of a run target.
 pending_action() {
-  local transcript="$1" i out
+  local transcript="$1" i out tries="${TELEGRAM_PENDING_TRIES:-17}"
   [ -r "$transcript" ] || return 0
-  for ((i = 0; i < 8; i++)); do
+  for ((i = 0; i < tries; i++)); do
     out=$(tail -n 400 "$transcript" 2>/dev/null | jq -Rsr '
-      split("\n") | map(select(length > 0) | fromjson?)
-      | map(select(.type == "assistant" and ((.message.content // []) | any(.type == "tool_use")))) | last
-      | if . == null then empty else
-          .isSidechain as $sc
-          | ((.message.content // []) | map(select(.type == "tool_use"))) as $tools
+      # .message.content is usually an array of blocks, but a user turn can carry
+      # a bare string (e.g. slash-command output); normalize before iterating.
+      def content_blocks: (.message.content // []) | if type == "array" then . else [] end;
+      ( split("\n") | map(select(length > 0) | fromjson?) ) as $rows
+      | ( [ $rows[] | select(.type == "user")
+            | content_blocks[] | select(.type == "tool_result") | .tool_use_id ] ) as $resolved
+      | ( [ $rows[] | select(.type == "assistant") | . as $msg
+            | ( content_blocks
+                | map(select(.type == "tool_use")
+                      | select((.id) as $id | ($resolved | index($id)) == null)) ) as $pending
+            | select(($pending | length) > 0)
+            | { sc: ($msg.isSidechain == true), tools: $pending } ] | last ) as $hit
+      | if $hit == null then empty else
+          $hit.tools as $tools
           | $tools[0] as $t | ($t.input // {}) as $in
           | (if   $t.name == "Bash" then ($in.command // "")
              elif $t.name == "WebFetch" then ($in.url // "")
@@ -372,7 +386,7 @@ pending_action() {
              elif ($t.name | test("Glob|Grep")) then ($in.pattern // "")
              else "" end) as $raw
           | ($raw | gsub("\\s+"; " ")) as $flat
-          | { sidechain: ($sc == true), tool: $t.name, n: ($tools | length),
+          | { sidechain: $hit.sc, tool: $t.name, n: ($tools | length),
               target: (if ($flat | length) > 150 then $flat[0:150] + "…" else $flat end),
               question: (if $t.name == "AskUserQuestion" then ($in.questions[0].question // "") else "" end),
               options: (if $t.name == "AskUserQuestion" then [ ($in.questions[0].options // [])[].label ] else [] end) }
@@ -577,43 +591,47 @@ open_editor() {
   esac
 }
 
-case "${1:-}" in
-  --discover) discover ;;
-  --edit|--config)
-    if [ ! -f "$CONFIG_FILE" ]; then
-      mkdir -p "$(dirname "$CONFIG_FILE")" 2>/dev/null || true
-      : > "$CONFIG_FILE" && chmod 600 "$CONFIG_FILE" 2>/dev/null || true
-    fi
-    echo "Opening $CONFIG_FILE in your editor…"
-    open_editor "$CONFIG_FILE"
-    ;;
-  --test)
-    [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ] \
-      || die "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in $CONFIG_FILE first"
-    sample='Fixed the failing checkout flow: applyDiscount in cart.ts mutated the shared cart, so a second coupon stacked on stale state. It now returns a new cart, three call sites were updated, and a regression test was added. All 42 tests pass.'
-    if [ -z "$TELEGRAM_LLM_URL" ]; then
-      echo "LLM summaries disabled (TELEGRAM_LLM_URL empty) — sending with the message's own lead text."
-      body=$(printf '%s' "$sample" | normalize_ws)
-    else
-      classified=$(llm_classify "$sample")
-      if [ -n "$classified" ]; then
-        echo "LLM gateway OK ($TELEGRAM_LLM_MODEL): kind=$(jq -r .kind <<<"$classified"), summary=$(jq -r .summary <<<"$classified")"
-        body=$(jq -r '.summary' <<<"$classified" | normalize_ws)
-      else
-        echo "LLM gateway unreachable at $TELEGRAM_LLM_URL — sending with fallback text."
-        body=$(printf '%s' "$sample" | normalize_ws)
+# Only dispatch when executed directly; when sourced (e.g. by tests) just define
+# the functions above and return, so callers can exercise them in isolation.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  case "${1:-}" in
+    --discover) discover ;;
+    --edit|--config)
+      if [ ! -f "$CONFIG_FILE" ]; then
+        mkdir -p "$(dirname "$CONFIG_FILE")" 2>/dev/null || true
+        : > "$CONFIG_FILE" && chmod 600 "$CONFIG_FILE" 2>/dev/null || true
       fi
-    fi
-    test_header=$(printf '📁 <b>test-project</b> · 💻 %s' "$(printf '%s' "$TELEGRAM_MACHINE_NAME" | html_escape)")
-    [ -n "$TELEGRAM_ACCOUNT_LABEL_RESOLVED" ] && \
-      test_header="$test_header · 👤 $(printf '%s' "$TELEGRAM_ACCOUNT_LABEL_RESOLVED" | html_escape)"
-    resp=$(send_message "$test_header" "✅ Done · 2m 14s" "$body")
-    if [ "$(jq -r '.ok' <<<"$resp")" = "true" ]; then
-      echo "Sent. Check your Telegram destination."
-    else
-      die "Telegram rejected it: $(jq -r '.description // "unknown"' <<<"$resp")"
-    fi
-    ;;
-  "") main ;;
-  *) die "unknown option: $1 (use --discover, --test, --edit, or pipe hook JSON on stdin)" ;;
-esac
+      echo "Opening $CONFIG_FILE in your editor…"
+      open_editor "$CONFIG_FILE"
+      ;;
+    --test)
+      [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ] \
+        || die "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in $CONFIG_FILE first"
+      sample='Fixed the failing checkout flow: applyDiscount in cart.ts mutated the shared cart, so a second coupon stacked on stale state. It now returns a new cart, three call sites were updated, and a regression test was added. All 42 tests pass.'
+      if [ -z "$TELEGRAM_LLM_URL" ]; then
+        echo "LLM summaries disabled (TELEGRAM_LLM_URL empty) — sending with the message's own lead text."
+        body=$(printf '%s' "$sample" | normalize_ws)
+      else
+        classified=$(llm_classify "$sample")
+        if [ -n "$classified" ]; then
+          echo "LLM gateway OK ($TELEGRAM_LLM_MODEL): kind=$(jq -r .kind <<<"$classified"), summary=$(jq -r .summary <<<"$classified")"
+          body=$(jq -r '.summary' <<<"$classified" | normalize_ws)
+        else
+          echo "LLM gateway unreachable at $TELEGRAM_LLM_URL — sending with fallback text."
+          body=$(printf '%s' "$sample" | normalize_ws)
+        fi
+      fi
+      test_header=$(printf '📁 <b>test-project</b> · 💻 %s' "$(printf '%s' "$TELEGRAM_MACHINE_NAME" | html_escape)")
+      [ -n "$TELEGRAM_ACCOUNT_LABEL_RESOLVED" ] && \
+        test_header="$test_header · 👤 $(printf '%s' "$TELEGRAM_ACCOUNT_LABEL_RESOLVED" | html_escape)"
+      resp=$(send_message "$test_header" "✅ Done · 2m 14s" "$body")
+      if [ "$(jq -r '.ok' <<<"$resp")" = "true" ]; then
+        echo "Sent. Check your Telegram destination."
+      else
+        die "Telegram rejected it: $(jq -r '.description // "unknown"' <<<"$resp")"
+      fi
+      ;;
+    "") main ;;
+    *) die "unknown option: $1 (use --discover, --test, --edit, or pipe hook JSON on stdin)" ;;
+  esac
+fi
